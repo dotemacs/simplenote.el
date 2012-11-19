@@ -233,6 +233,7 @@ via the usual `-*- mode: text -*-' header line."
         (message "Pushed note %s" simplenote-key)
       (message "Failed to push note %s" simplenote-key))))
 
+;;;###autoload
 (defun simplenote-create-note-from-buffer ()
   (interactive)
   (let (createdate key)
@@ -275,6 +276,7 @@ via the usual `-*- mode: text -*-' header line."
 (defun simplenote-new-notes-dir ()
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "new")))
 
+;;;###autoload
 (defun simplenote-setup ()
   (interactive)
   (when (not (file-exists-p simplenote-directory))
@@ -473,6 +475,7 @@ setting."
         mode-name "Simplenote")
   (run-mode-hooks 'simplenote-mode-hook))
 
+;;;###autoload
 (defun simplenote-browse ()
   (interactive)
   (when (not (file-exists-p simplenote-directory))
