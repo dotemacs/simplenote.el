@@ -271,7 +271,7 @@ via the usual `-*- mode: text -*-' header line."
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "trash")))
 
 (defun simplenote-notes-dir ()
-  (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "notes")))
+  (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "mynotes")))
 
 (defun simplenote-new-notes-dir ()
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "new")))
@@ -322,6 +322,18 @@ via the usual `-*- mode: text -*-' header line."
                            (min (length text)
                                 (+ (match-end 0) (- simplenote-note-head-size (length headline))))))))
 
+(defun simplenote-gmt-to-local (gmt)
+ (let (tz-offset)
+    (setq tz-offset (car (current-time-zone)))
+    (time-add gmt (butlast (seconds-to-time (+ tz-offset)))))
+)
+
+(defun simplenote-local-to-gmt (local)
+ (let (tz-offset)
+    (setq tz-offset (car (current-time-zone)))
+    (time-add local (butlast (seconds-to-time (- tz-offset)))))
+)
+
 (defun simplenote-open-note (file)
   "Opens FILE in a new buffer, setting its mode, and returns the buffer.
 
@@ -348,6 +360,8 @@ setting."
 
     ;; Try to download the index. If this fails then the connection is broken or
     ;; authentication failed. Abort sync.
+    
+    ;; times in this index are in GMT
     (setq index (simplenote-get-index (simplenote-token) (simplenote-email)))
     (if (not index)
         (message "Could not retrieve the index. Aborting sync.")
@@ -393,7 +407,7 @@ setting."
               (when (not deleted)
                 ;; Download
                 (when (or (not (file-exists-p file))
-                          (time-less-p (nth 5 (file-attributes file)) modify))
+                          (time-less-p (simplenote-file-mtime-gmt file) modify))
                   (message "Downloading note %s from Simplenote" key)
                   (multiple-value-bind (note-text note-key note-createdate
                                                   note-modifydate note-deleted)
@@ -402,11 +416,11 @@ setting."
                         (progn
                           (message "Downloaded note %s" key)
                           (write-region note-text nil file nil)
-                          (set-file-times file note-modifydate))
+                          (set-file-times file (simplenote-gmt-to-local note-modifydate)))
                       (message "Failed to download note %s" key))))
                 ;; Upload
                 (when (and (file-exists-p file)
-                           (time-less-p modify (nth 5 (file-attributes file))))
+                           (time-less-p modify (simplenote-file-mtime-gmt file)))
                   (message "Uploading note %s to Simplenote" key)
                   (setq note-text (simplenote-file-contents file))
                   (setq note-key (simplenote-update-note key
