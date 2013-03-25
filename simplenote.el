@@ -147,12 +147,15 @@ via the usual `-*- mode: text -*-' header line."
         (string-match "^note-key: \\(.*\\)$" headers)
         (setq note-key (match-string 1 headers))
         (string-match "^note-modifydate: \\(.*\\)$" headers)
-        (setq note-modifydate (date-to-time (match-string 1 headers)))
+        (setq note-modifydate (simplenote-parse-gmt-time (match-string 1 headers)))
         (string-match "^note-createdate: \\(.*\\)$" headers)
-        (setq note-createdate (date-to-time (match-string 1 headers)))
+        (setq note-createdate (simplenote-parse-gmt-time (match-string 1 headers)))
         (string-match "^note-deleted: \\(.*\\)$" headers)
         (setq note-deleted (match-string 1 headers))))
     (values data note-key note-createdate note-modifydate note-deleted)))
+
+(defun simplenote-parse-gmt-time (header-str)
+  (apply 'encode-time (append (butlast (parse-time-string header-str)) (list "GMT"))))
 
 (defun simplenote-mark-note-as-deleted (key token email)
   (let (url)
@@ -172,7 +175,7 @@ via the usual `-*- mode: text -*-' header line."
                    (url-hexify-string key)
                    (url-hexify-string token)
                    (url-hexify-string email)
-                   (url-hexify-string (format-time-string "%Y-%m-%d %H:%M:%S" modifydate))))
+                   (url-hexify-string (format-time-string "%Y-%m-%d %H:%M:%S" modifydate t))))
       (setq url (format
                  "https://simple-note.appspot.com/api/note?key=%s&auth=%s&email=%s"
                  (url-hexify-string key)
@@ -195,7 +198,7 @@ via the usual `-*- mode: text -*-' header line."
                    "https://simple-note.appspot.com/api/note?auth=%s&email=%s&create=%s"
                    (url-hexify-string token)
                    (url-hexify-string email)
-                   (url-hexify-string (format-time-string "%Y-%m-%d %H:%M:%S" createdate))))
+                   (url-hexify-string (format-time-string "%Y-%m-%d %H:%M:%S" createdate t))))
       (setq url (format
                  "https://simple-note.appspot.com/api/note?auth=%s&email=%s"
                  (url-hexify-string token)
@@ -211,19 +214,15 @@ via the usual `-*- mode: text -*-' header line."
     note-key))
 
 
+(defun simplenote-file-mtime (path)
+  (nth 5 (file-attributes path)))
+
 ;;; Push and pull buffer as note
-
-(defun simplenote-file-mtime-gmt (path)
-  (let (mtime tz-offset)
-    (setq mtime (nth 5 (file-attributes path)))
-    (setq tz-offset (nth 8 (decode-time mtime)))
-    (time-add mtime (butlast (seconds-to-time (- tz-offset))))))
-
 (defun simplenote-push-buffer ()
   (interactive)
   (let (modifydate success)
     (save-buffer)
-    (setq modifydate (simplenote-file-mtime-gmt (buffer-file-name)))
+    (setq modifydate (simplenote-file-mtime (buffer-file-name)))
     (setq success (simplenote-update-note simplenote-key
                                           (encode-coding-string (buffer-string) 'utf-8 t)
                                           (simplenote-token)
@@ -238,7 +237,7 @@ via the usual `-*- mode: text -*-' header line."
   (interactive)
   (let (createdate key)
     (save-buffer)
-    (setq createdate (simplenote-file-mtime-gmt (buffer-file-name)))
+    (setq createdate (simplenote-file-mtime (buffer-file-name)))
     (setq key (simplenote-create-note (encode-coding-string (buffer-string) 'utf-8 t)
                                       (simplenote-token)
                                       (simplenote-email)
@@ -271,7 +270,7 @@ via the usual `-*- mode: text -*-' header line."
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "trash")))
 
 (defun simplenote-notes-dir ()
-  (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "notes")))
+  (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "mynotes")))
 
 (defun simplenote-new-notes-dir ()
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "new")))
@@ -348,6 +347,8 @@ setting."
 
     ;; Try to download the index. If this fails then the connection is broken or
     ;; authentication failed. Abort sync.
+    
+    ;; times in this index are in GMT
     (setq index (simplenote-get-index (simplenote-token) (simplenote-email)))
     (if (not index)
         (message "Could not retrieve the index. Aborting sync.")
@@ -383,7 +384,7 @@ setting."
             (let (key deleted modify file note-text note-key temp-buffer)
               (setq key (cdr (assoc 'key elem)))
               (setq deleted (eq (cdr (assoc 'deleted elem)) t))
-              (setq modify (date-to-time (cdr (assoc 'modify elem))))
+              (setq modify (simplenote-parse-gmt-time (cdr (assoc 'modify elem))))
               (setq file (simplenote-filename-for-note key))
               ;; Remove the file corresponding to this index element from the
               ;; list of files. At the end of the loop `files` will contain only
@@ -393,7 +394,7 @@ setting."
               (when (not deleted)
                 ;; Download
                 (when (or (not (file-exists-p file))
-                          (time-less-p (nth 5 (file-attributes file)) modify))
+                          (time-less-p (simplenote-file-mtime file) modify))
                   (message "Downloading note %s from Simplenote" key)
                   (multiple-value-bind (note-text note-key note-createdate
                                                   note-modifydate note-deleted)
@@ -406,14 +407,14 @@ setting."
                       (message "Failed to download note %s" key))))
                 ;; Upload
                 (when (and (file-exists-p file)
-                           (time-less-p modify (nth 5 (file-attributes file))))
+                           (time-less-p modify (simplenote-file-mtime file)))
                   (message "Uploading note %s to Simplenote" key)
                   (setq note-text (simplenote-file-contents file))
                   (setq note-key (simplenote-update-note key
                                                          note-text
                                                          (simplenote-token)
                                                          (simplenote-email)
-                                                         (simplenote-file-mtime-gmt file)))
+                                                         (simplenote-file-mtime file)))
                   (if note-key
                       (message "Uploaded note %s" note-key)
                     (message "Failed to upload note %s" note-key))))
@@ -442,7 +443,7 @@ setting."
               (setq note-key (simplenote-create-note text
                                                      (simplenote-token)
                                                      (simplenote-email)
-                                                     (simplenote-file-mtime-gmt file)))
+                                                     (simplenote-file-mtime file)))
               (when note-key
                 (message "Created new note on the server with key %s" note-key)
                 (let (new-filename)
