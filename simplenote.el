@@ -270,7 +270,7 @@ via the usual `-*- mode: text -*-' header line."
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "trash")))
 
 (defun simplenote-notes-dir ()
-  (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "mynotes")))
+  (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "notes")))
 
 (defun simplenote-new-notes-dir ()
   (file-name-as-directory (concat (file-name-as-directory simplenote-directory) "new")))
@@ -347,7 +347,7 @@ setting."
 
     ;; Try to download the index. If this fails then the connection is broken or
     ;; authentication failed. Abort sync.
-    
+
     ;; times in this index are in GMT
     (setq index (simplenote-get-index (simplenote-token) (simplenote-email)))
     (if (not index)
