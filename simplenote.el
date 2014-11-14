@@ -220,17 +220,36 @@ via the usual `-*- mode: text -*-' header line."
 ;;; Push and pull buffer as note
 (defun simplenote-push-buffer ()
   (interactive)
-  (let (modifydate success)
-    (save-buffer)
-    (setq modifydate (simplenote-file-mtime (buffer-file-name)))
-    (setq success (simplenote-update-note simplenote-key
-                                          (encode-coding-string (buffer-string) 'utf-8 t)
-                                          (simplenote-token)
-                                          (simplenote-email)
-                                          modifydate))
-    (if success
-        (message "Pushed note %s" simplenote-key)
-      (message "Failed to push note %s" simplenote-key))))
+  (if (and (not simplenote-key)
+           (string-match (simplenote-new-notes-dir) (file-name-directory (buffer-file-name))))
+      (progn
+        (let (key new-filename)
+          (setq key (simplenote-create-new-note))
+          (when key
+            (setq new-filename (simplenote-filename-for-note key))
+            (rename-file buffer-file-name new-filename)
+            (rename-buffer key)
+            (set-visited-file-name new-filename)
+            (set-buffer-modified-p nil)
+            (simplenote-browser-refresh))))
+    (when (and (not simplenote-key)
+               (string-match (simplenote-notes-dir) (file-name-directory (buffer-file-name))))
+      (setq simplenote-key (file-name-nondirectory buffer-file-name)))
+    (if simplenote-key
+        (let (modifydate success)
+          (save-buffer)
+          (setq modifydate (simplenote-file-mtime (buffer-file-name)))
+          (setq success (simplenote-update-note simplenote-key
+                                                (encode-coding-string (buffer-string) 'utf-8 t)
+                                                (simplenote-token)
+                                                (simplenote-email)
+                                                modifydate))
+          (if success
+              (progn
+                (message "Pushed note %s" simplenote-key)
+                (simplenote-browser-refresh))
+            (message "Failed to push note %s" simplenote-key)))
+      (message "Can't push buffer which isn't simplenote note"))))
 
 ;;;###autoload
 (defun simplenote-create-note-from-buffer ()
@@ -252,16 +271,21 @@ via the usual `-*- mode: text -*-' header line."
 
 (defun simplenote-pull-buffer ()
   (interactive)
-  (multiple-value-bind (data note-key note-createdate note-modifydate note-deleted)
-      (simplenote-get-note simplenote-key
-                           (simplenote-token)
-                           (simplenote-email))
-    (if data
-        (progn
-          (erase-buffer)
-          (insert data)
-          (message "Pulled note %s" simplenote-key))
-      (message "Failed to pull note %s" simplenote-key))))
+  (when (and (not simplenote-key)
+             (string-match (simplenote-notes-dir) (file-name-directory (buffer-file-name))))
+    (setq simplenote-key (file-name-nondirectory buffer-file-name)))
+  (if simplenote-key
+      (multiple-value-bind (data note-key note-createdate note-modifydate note-deleted)
+          (simplenote-get-note simplenote-key
+                               (simplenote-token)
+                               (simplenote-email))
+        (if data
+            (progn
+              (erase-buffer)
+              (insert data)
+              (message "Pulled note %s" simplenote-key))
+          (message "Failed to pull note %s" simplenote-key)))
+    (message "Can't pull buffer which isn't simplenote note")))
 
 
 ;;; Browser helper functions
