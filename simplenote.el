@@ -217,6 +217,20 @@ via the usual `-*- mode: text -*-' header line."
 (defun simplenote-file-mtime (path)
   (nth 5 (file-attributes path)))
 
+(defun simplenote-create-new-note ()
+  (let (createdate key)
+    (save-buffer)
+    (setq createdate (simplenote-file-mtime (buffer-file-name)))
+    (setq key (simplenote-create-note (encode-coding-string (buffer-string) 'utf-8 t)
+                                      (simplenote-token)
+                                      (simplenote-email)
+                                      createdate))
+    (if key
+        (progn
+          (setq simplenote-key key)
+          (message "Created note %s" key))
+      (message "Failed to create new note")) key))
+
 ;;; Push and pull buffer as note
 (defun simplenote-push-buffer ()
   (interactive)
@@ -254,20 +268,11 @@ via the usual `-*- mode: text -*-' header line."
 ;;;###autoload
 (defun simplenote-create-note-from-buffer ()
   (interactive)
-  (let (createdate key)
-    (save-buffer)
-    (setq createdate (simplenote-file-mtime (buffer-file-name)))
-    (setq key (simplenote-create-note (encode-coding-string (buffer-string) 'utf-8 t)
-                                      (simplenote-token)
-                                      (simplenote-email)
-                                      createdate))
-    (if key
-        (progn
-          (setq simplenote-key key)
-          (message "Created note %s" key)
-          (add-file-local-variable 'simplenote-key key)
-          (simplenote-push-buffer))
-      (message "Failed to create new note"))))
+  (let (key)
+    (setq key (simplenote-create-new-note))
+    (when key
+      (add-file-local-variable 'simplenote-key key)
+      (simplenote-push-buffer))))
 
 (defun simplenote-pull-buffer ()
   (interactive)
