@@ -367,13 +367,14 @@ setting."
   "Synchronize local notes with the simplenote server."
   (interactive)
 
-  (let (index index-keys files files-marked-deleted)
+  (let (token index index-keys files files-marked-deleted)
 
     ;; Try to download the index. If this fails then the connection is broken or
     ;; authentication failed. Abort sync.
 
     ;; times in this index are in GMT
-    (setq index (simplenote-get-index (simplenote-token) (simplenote-email)))
+    (setq token (simplenote-token))
+    (setq index (simplenote-get-index token (simplenote-email)))
     (if (not index)
         (message "Could not retrieve the index. Aborting sync.")
 
@@ -390,7 +391,7 @@ setting."
               (if (member key keys-in-index)
                 (progn
                   (setq success (simplenote-mark-note-as-deleted key
-                                                                 (simplenote-token)
+                                                                 token
                                                                  (simplenote-email)))
                   (when success
                     (message "Marked note %s as deleted on the server" key)
@@ -422,7 +423,7 @@ setting."
                   (message "Downloading note %s from Simplenote" key)
                   (multiple-value-bind (note-text note-key note-createdate
                                                   note-modifydate note-deleted)
-                      (simplenote-get-note key (simplenote-token) (simplenote-email))
+                      (simplenote-get-note key token (simplenote-email))
                     (if note-text
                         (progn
                           (message "Downloaded note %s" key)
@@ -436,7 +437,7 @@ setting."
                   (setq note-text (simplenote-file-contents file))
                   (setq note-key (simplenote-update-note key
                                                          note-text
-                                                         (simplenote-token)
+                                                         token
                                                          (simplenote-email)
                                                          (simplenote-file-mtime file)))
                   (if note-key
@@ -465,7 +466,7 @@ setting."
               (setq text (simplenote-file-contents file))
               (setq mod-time (nth 5 (file-attributes file)))
               (setq note-key (simplenote-create-note text
-                                                     (simplenote-token)
+                                                     token
                                                      (simplenote-email)
                                                      (simplenote-file-mtime file)))
               (when note-key
