@@ -57,6 +57,12 @@ via the usual `-*- mode: text -*-' header line."
   :type 'function
   :group 'simplenote)
 
+(defcustom simplenote-note-head-size 78
+  "Length of note headline in the notes list."
+  :type 'integer
+  :safe 'integerp
+  :group 'simplenote)
+
 (defvar simplenote-mode-hook nil)
 
 (put 'simplenote-mode 'mode-class 'special)
@@ -330,9 +336,6 @@ via the usual `-*- mode: text -*-' header line."
       (setq contents (encode-coding-string (buffer-string) 'utf-8 t)))
     (kill-buffer " *simplenote-temp*")
     contents))
-
-(defvar simplenote-note-head-size 78
-  "Length of note headline in the notes list.")
 
 (defun simplenote-note-headline (text)
   "The first non-empty line of a note."
