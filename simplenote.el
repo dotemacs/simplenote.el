@@ -63,6 +63,12 @@ via the usual `-*- mode: text -*-' header line."
   :safe 'integerp
   :group 'simplenote)
 
+(defcustom simplenote-show-note-file-name t
+  "Show file name for each note in the note list."
+  :type 'boolean
+  :safe 'booleanp
+  :group 'simplenote)
+
 (defvar simplenote-mode-hook nil)
 
 (put 'simplenote-mode 'mode-class 'special)
@@ -627,7 +633,9 @@ setting."
                              (simplenote-open-note (widget-get widget :tag)))
                    headline)
     (widget-insert shorttext "\n")
-    (widget-insert "  " modify-string "\t" (propertize key 'face 'shadow) "\t")
+    (if simplenote-show-note-file-name
+      (widget-insert "  " modify-string "\t" (propertize key 'face 'shadow) "\t")
+      (widget-insert "  " modify-string "\t"))
     (widget-create 'link
                    :tag file
                    :value "Edit"
