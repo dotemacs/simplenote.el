@@ -57,6 +57,18 @@ via the usual `-*- mode: text -*-' header line."
   :type 'function
   :group 'simplenote)
 
+(defcustom simplenote-note-head-size 78
+  "Length of note headline in the notes list."
+  :type 'integer
+  :safe 'integerp
+  :group 'simplenote)
+
+(defcustom simplenote-show-note-file-name t
+  "Show file name for each note in the note list."
+  :type 'boolean
+  :safe 'booleanp
+  :group 'simplenote)
+
 (defvar simplenote-mode-hook nil)
 
 (put 'simplenote-mode 'mode-class 'special)
@@ -331,9 +343,6 @@ via the usual `-*- mode: text -*-' header line."
     (kill-buffer " *simplenote-temp*")
     contents))
 
-(defvar simplenote-note-head-size 78
-  "Length of note headline in the notes list.")
-
 (defun simplenote-note-headline (text)
   "The first non-empty line of a note."
   (let ((begin (string-match "^.+$" text)))
@@ -346,9 +355,8 @@ via the usual `-*- mode: text -*-' header line."
   (let* ((headline (simplenote-note-headline text))
          (text (replace-regexp-in-string "\n" " " text))
          (begin (when headline (string-match (regexp-quote headline) text))))
-    (when begin (substring text (match-end 0)
-                           (min (length text)
-                                (+ (match-end 0) (- simplenote-note-head-size (length headline))))))))
+    (when begin
+      (truncate-string-to-width (substring text (match-end 0)) (- simplenote-note-head-size (string-width headline))))))
 
 (defun simplenote-open-note (file)
   "Opens FILE in a new buffer, setting its mode, and returns the buffer.
@@ -625,7 +633,9 @@ setting."
                              (simplenote-open-note (widget-get widget :tag)))
                    headline)
     (widget-insert shorttext "\n")
-    (widget-insert "  " modify-string "\t" (propertize key 'face 'shadow) "\t")
+    (if simplenote-show-note-file-name
+      (widget-insert "  " modify-string "\t" (propertize key 'face 'shadow) "\t")
+      (widget-insert "  " modify-string "\t"))
     (widget-create 'link
                    :tag file
                    :value "Edit"
