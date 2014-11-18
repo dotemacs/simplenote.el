@@ -346,9 +346,8 @@ via the usual `-*- mode: text -*-' header line."
   (let* ((headline (simplenote-note-headline text))
          (text (replace-regexp-in-string "\n" " " text))
          (begin (when headline (string-match (regexp-quote headline) text))))
-    (when begin (substring text (match-end 0)
-                           (min (length text)
-                                (+ (match-end 0) (- simplenote-note-head-size (length headline))))))))
+    (when begin
+      (truncate-string-to-width (substring text (match-end 0)) (- simplenote-note-head-size (string-width headline))))))
 
 (defun simplenote-open-note (file)
   "Opens FILE in a new buffer, setting its mode, and returns the buffer.
