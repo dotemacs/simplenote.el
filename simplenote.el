@@ -511,6 +511,47 @@ Notes marked as deleted are not included in the list."
             (message "Failed to push note %s" simplenote-key)))
       (message "Can't push buffer which isn't simplenote note"))))
 
+(defun simplenote2-push-buffer-deferred ()
+  (interactive)
+  (lexical-let ((file (buffer-file-name))
+                (buf (current-buffer)))
+    (cond
+     ;; File is located on new notes directory
+     ((string-match (simplenote-new-notes-dir)
+                    (file-name-directory file))
+      (save-buffer)
+      (deferred:$
+        (simplenote2-create-note-deferred (buffer-string)
+                                          (simplenote-file-mtime file))
+        (deferred:nextc it
+          (lambda (key)
+            (when key
+              (simplenote-open-note (simplenote-filename-for-note key))
+              (delete-file file)
+              (kill-buffer buf)
+              (simplenote-browser-refresh))))))
+     ;; File is located on notes directory
+     ((string-match (simplenote-notes-dir)
+                    (file-name-directory file))
+      (lexical-let* ((key (file-name-nondirectory file))
+                     (note-info (gethash key simplenote2-notes-info)))
+        (save-buffer)
+        (if (and note-info
+                 (time-less-p (seconds-to-time (nth 3 note-info))
+                              (simplenote-file-mtime file)))
+            (deferred:$
+              (simplenote2-update-note-deferred key)
+              (deferred:nextc it
+                (lambda (ret)
+                  (if ret (progn
+                            (message "Pushed note %s" key)
+                            (when buf (current-buffer)
+                                  (revert-buffer nil t t))
+                            (simplenote-browser-refresh))
+                    (message "Failed to push note %s" key)))))
+          (message "No need to push this note"))))
+     (t (message "Can't push buffer which isn't simplenote note")))))
+
 ;;;###autoload
 (defun simplenote-create-note-from-buffer ()
   (interactive)
