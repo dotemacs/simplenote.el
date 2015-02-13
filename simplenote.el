@@ -579,6 +579,29 @@ Notes marked as deleted are not included in the list."
           (message "Failed to pull note %s" simplenote-key)))
     (message "Can't pull buffer which isn't simplenote note")))
 
+(defun simplenote2-pull-buffer-deferred ()
+  (interactive)
+  (lexical-let ((file (buffer-file-name))
+                (buf (current-buffer)))
+    (if (string= (simplenote-notes-dir) (file-name-directory file))
+        (lexical-let* ((key (file-name-nondirectory file))
+                       (note-info (gethash key simplenote2-notes-info)))
+          (if (and note-info
+                   (time-less-p (seconds-to-time (nth 3 note-info))
+                                (simplenote-file-mtime file))
+                   (y-or-n-p
+                    "This note appears to have been modified. Do you push it on ahead?"))
+              (simplenote2-push-buffer-deferred)
+            (save-buffer)
+            (deferred:$
+              (simplenote2-get-note-deferred key)
+              (deferred:nextc it
+                (lambda (ret)
+                  (when (eq buf (current-buffer))
+                    (revert-buffer nil t t)))
+                (simplenote-browser-refresh)))))
+      (message "Can't pull buffer which isn't simplenote note"))))
+
 
 ;;; Browser helper functions
 
