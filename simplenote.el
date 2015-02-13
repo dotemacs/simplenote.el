@@ -79,9 +79,6 @@ via the usual `-*- mode: text -*-' header line."
 
 ;;; Simplenote authentication
 
-(defun simplenote-encode-post-data (string)
-  (concat (base64-encode-string string) "\n"))
-
 (defun simplenote2-tag-existp (tag array)
   "Returns t if there is a string named TAG in array ARRAY, otherwise nil"
   (loop for i from 0 below (length array)
@@ -146,9 +143,6 @@ via the usual `-*- mode: text -*-' header line."
         (write-region text nil file nil)
         (set-file-times file (seconds-to-time modifydate))))))
 
-(defvar simplenote-key nil)
-(make-variable-buffer-local 'simplenote-key)
-
 (defvar simplenote-email-was-read-interactively nil)
 (defvar simplenote-password-was-read-interactively nil)
 
@@ -170,31 +164,6 @@ via the usual `-*- mode: text -*-' header line."
     (setq simplenote-password (read-passwd "Simplenote password: "))
     (setq simplenote-password-was-read-interactively t))
   simplenote-password)
-
-(defun simplenote-get-token (email password)
-  (let ((url "https://simple-note.appspot.com/api/login")
-        (url-request-method "POST")
-        (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded")))
-        (url-request-data (simplenote-encode-post-data (format "email=%s&password=%s"
-                                        (url-hexify-string email)
-                                        (url-hexify-string password)))))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (when (eql url-http-response-status 200)
-        (goto-char (point-min))
-        (search-forward-regexp "^$" nil t)
-        (buffer-substring (1+ (point)) (point-max))))))
-
-(defun simplenote-token ()
-  (interactive)
-  (let ((token (simplenote-get-token (simplenote-email) (simplenote-password))))
-    (if token
-        (message "Simplenote authentication succeeded")
-      (if simplenote-email-was-read-interactively
-          (setq simplenote-email nil))
-      (if simplenote-password-was-read-interactively
-          (setq simplenote-password nil))
-      (message "Simplenote authentication failed"))
-    token))
 
 (defun simplenote2-get-token-deferred ()
   "Returns simplenote token wrapped with deferred object.
@@ -229,21 +198,6 @@ This function returns cached token if it's cached to 'simplenote2-token,\
 
 ;;; API calls for index and notes
 
-(defun simplenote-get-index (token email)
-  (let (url status headers data index)
-    (setq url (format "https://simple-note.appspot.com/api/index?auth=%s&email=%s"
-                      (url-hexify-string token)
-                      (url-hexify-string email)))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (setq status url-http-response-status)
-      (when (eql status 200)
-        (goto-char (point-min))
-        (search-forward-regexp "^$" nil t)
-        (setq headers (buffer-substring (point-min) (point)))
-        (setq data (buffer-substring (1+ (point)) (point-max)))
-        (setq index (json-read-from-string data))))
-    index))
-
 (defun simplenote2-get-index-deferred ()
   "Get note index from server and returns the list of note index.
 
@@ -275,32 +229,6 @@ Notes marked as deleted are not included in the list."
                         (request-response-data res))
                   index)))))))))
 
-(defun simplenote-get-note (key token email)
-  (let (url status headers data note-key note-modifydate note-createdate note-deleted)
-    (setq url (format
-               "https://simple-note.appspot.com/api/note?key=%s&auth=%s&email=%s"
-               (url-hexify-string key)
-               (url-hexify-string token)
-               (url-hexify-string email)))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (setq status url-http-response-status)
-      (when (eql status 200)
-        (goto-char (point-min))
-        (search-forward-regexp "^$" nil t)
-        (setq headers (buffer-substring (point-min) (point)))
-        (setq data (decode-coding-string
-                    (buffer-substring (1+ (point)) (point-max))
-                    'utf-8))
-        (string-match "^note-key: \\(.*\\)$" headers)
-        (setq note-key (match-string 1 headers))
-        (string-match "^note-modifydate: \\(.*\\)$" headers)
-        (setq note-modifydate (simplenote-parse-gmt-time (match-string 1 headers)))
-        (string-match "^note-createdate: \\(.*\\)$" headers)
-        (setq note-createdate (simplenote-parse-gmt-time (match-string 1 headers)))
-        (string-match "^note-deleted: \\(.*\\)$" headers)
-        (setq note-deleted (match-string 1 headers))))
-    (values data note-key note-createdate note-modifydate note-deleted)))
-
 (defun simplenote2-get-note-deferred (key)
   (lexical-let ((key key))
     (deferred:$
@@ -324,16 +252,6 @@ Notes marked as deleted are not included in the list."
 (defun simplenote-parse-gmt-time (header-str)
   (apply 'encode-time (append (butlast (parse-time-string header-str)) (list "GMT"))))
 
-(defun simplenote-mark-note-as-deleted (key token email)
-  (let (url)
-    (setq url (format
-               "https://simple-note.appspot.com/api/delete?key=%s&auth=%s&email=%s"
-               (url-hexify-string key)
-               (url-hexify-string token)
-               (url-hexify-string email)))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (eql url-http-response-status 200))))
-
 (defun simplenote2-mark-note-as-deleted-deferred (key)
   (lexical-let ((key key))
     (deferred:$
@@ -353,30 +271,6 @@ Notes marked as deleted are not included in the list."
                 (if (request-response-error-thrown res)
                     (progn (message "Could not delete note %s" key) nil)
                   (request-response-data res))))))))))
-
-(defun simplenote-update-note (key text token email &optional modifydate)
-  (let (url url-request-method url-request-data status note-key)
-    (if modifydate
-        (setq url (format
-                   "https://simple-note.appspot.com/api/note?key=%s&auth=%s&email=%s&modify=%s"
-                   (url-hexify-string key)
-                   (url-hexify-string token)
-                   (url-hexify-string email)
-                   (url-hexify-string (format-time-string "%Y-%m-%d %H:%M:%S" modifydate t))))
-      (setq url (format
-                 "https://simple-note.appspot.com/api/note?key=%s&auth=%s&email=%s"
-                 (url-hexify-string key)
-                 (url-hexify-string token)
-                 (url-hexify-string email))))
-    (setq url-request-method "POST")
-    (setq url-request-data (simplenote-encode-post-data text))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (setq status url-http-response-status)
-      (when (eql status 200)
-        (goto-char (point-min))
-        (search-forward-regexp "^$" nil t)
-        (setq note-key (buffer-substring (1+ (point)) (point-max)))))
-    note-key))
 
 (defun simplenote2-update-note-deferred (key)
   (lexical-let ((key key)
@@ -411,28 +305,6 @@ Notes marked as deleted are not included in the list."
                   (simplenote2-save-note key (request-response-data res))
                   key)))))))))
 
-(defun simplenote-create-note (text token email &optional createdate)
-  (let (url url-request-method url-request-data status headers note-key)
-    (if createdate
-        (setq url (format
-                   "https://simple-note.appspot.com/api/note?auth=%s&email=%s&create=%s"
-                   (url-hexify-string token)
-                   (url-hexify-string email)
-                   (url-hexify-string (format-time-string "%Y-%m-%d %H:%M:%S" createdate t))))
-      (setq url (format
-                 "https://simple-note.appspot.com/api/note?auth=%s&email=%s"
-                 (url-hexify-string token)
-                 (url-hexify-string email))))
-    (setq url-request-method "POST")
-    (setq url-request-data (simplenote-encode-post-data text))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (setq status url-http-response-status)
-      (when (eql status 200)
-        (goto-char (point-min))
-        (search-forward-regexp "^$" nil t)
-        (setq note-key (buffer-substring (1+ (point)) (point-max)))))
-    note-key))
-
 (defun simplenote2-create-note-deferred (content &optional createdate)
   (lexical-let ((content content)
                 (createdate createdate))
@@ -463,54 +335,7 @@ Notes marked as deleted are not included in the list."
 (defun simplenote-file-mtime (path)
   (nth 5 (file-attributes path)))
 
-(defun simplenote-create-new-note ()
-  (let (createdate key)
-    (save-buffer)
-    (setq createdate (simplenote-file-mtime (buffer-file-name)))
-    (setq key (simplenote-create-note (encode-coding-string (buffer-string) 'utf-8 t)
-                                      (simplenote-token)
-                                      (simplenote-email)
-                                      createdate))
-    (if key
-        (progn
-          (setq simplenote-key key)
-          (message "Created note %s" key))
-      (message "Failed to create new note")) key))
-
 ;;; Push and pull buffer as note
-(defun simplenote-push-buffer ()
-  (interactive)
-  (if (and (not simplenote-key)
-           (string-match (simplenote-new-notes-dir) (file-name-directory (buffer-file-name))))
-      (progn
-        (let (key new-filename)
-          (setq key (simplenote-create-new-note))
-          (when key
-            (setq new-filename (simplenote-filename-for-note key))
-            (rename-file buffer-file-name new-filename)
-            (rename-buffer key)
-            (set-visited-file-name new-filename)
-            (set-buffer-modified-p nil)
-            (simplenote-browser-refresh))))
-    (when (and (not simplenote-key)
-               (string-match (simplenote-notes-dir) (file-name-directory (buffer-file-name))))
-      (setq simplenote-key (file-name-nondirectory buffer-file-name)))
-    (if simplenote-key
-        (let (modifydate success)
-          (save-buffer)
-          (setq modifydate (simplenote-file-mtime (buffer-file-name)))
-          (setq success (simplenote-update-note simplenote-key
-                                                (encode-coding-string (buffer-string) 'utf-8 t)
-                                                (simplenote-token)
-                                                (simplenote-email)
-                                                modifydate))
-          (if success
-              (progn
-                (message "Pushed note %s" simplenote-key)
-                (simplenote-browser-refresh))
-            (message "Failed to push note %s" simplenote-key)))
-      (message "Can't push buffer which isn't simplenote note"))))
-
 (defun simplenote2-push-buffer-deferred ()
   (interactive)
   (lexical-let ((file (buffer-file-name))
@@ -553,14 +378,6 @@ Notes marked as deleted are not included in the list."
      (t (message "Can't push buffer which isn't simplenote note")))))
 
 ;;;###autoload
-(defun simplenote-create-note-from-buffer ()
-  (interactive)
-  (let (key)
-    (setq key (simplenote-create-new-note))
-    (when key
-      (add-file-local-variable 'simplenote-key key)
-      (simplenote-push-buffer))))
-
 (defun simplenote2-create-note-from-buffer ()
   (interactive)
   (lexical-let ((file (buffer-file-name))
@@ -581,24 +398,6 @@ Notes marked as deleted are not included in the list."
               (delete-file file)
               (kill-buffer buf)
               (simplenote-browser-refresh))))))))
-
-(defun simplenote-pull-buffer ()
-  (interactive)
-  (when (and (not simplenote-key)
-             (string-match (simplenote-notes-dir) (file-name-directory (buffer-file-name))))
-    (setq simplenote-key (file-name-nondirectory buffer-file-name)))
-  (if simplenote-key
-      (multiple-value-bind (data note-key note-createdate note-modifydate note-deleted)
-          (simplenote-get-note simplenote-key
-                               (simplenote-token)
-                               (simplenote-email))
-        (if data
-            (progn
-              (erase-buffer)
-              (insert data)
-              (message "Pulled note %s" simplenote-key))
-          (message "Failed to pull note %s" simplenote-key)))
-    (message "Can't pull buffer which isn't simplenote note")))
 
 (defun simplenote2-pull-buffer-deferred ()
   (interactive)
@@ -697,123 +496,6 @@ setting."
 ;; Simplenote sync
 
 (defun simplenote-sync-notes ()
-  "Synchronize local notes with the simplenote server."
-  (interactive)
-
-  (let (token index index-keys files files-marked-deleted)
-
-    ;; Try to download the index. If this fails then the connection is broken or
-    ;; authentication failed. Abort sync.
-
-    ;; times in this index are in GMT
-    (setq token (simplenote-token))
-    (setq index (simplenote-get-index token (simplenote-email)))
-    (if (not index)
-        (message "Could not retrieve the index. Aborting sync.")
-
-      (setq keys-in-index (mapcar '(lambda (e) (cdr (assoc 'key e))) index))
-      (setq files (directory-files (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
-      (setq files-marked-deleted (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$"))
-
-      ;; If a file has been marked locally as deleted then sync the deletion and
-      ;; delete from the file system provided that the corresponding key is in
-      ;; the index. If the key is not in the index just delete the local file.
-      (loop for file in files-marked-deleted do
-            (let (key success)
-              (setq key (file-name-nondirectory file))
-              (if (member key keys-in-index)
-                (progn
-                  (setq success (simplenote-mark-note-as-deleted key
-                                                                 token
-                                                                 (simplenote-email)))
-                  (when success
-                    (message "Marked note %s as deleted on the server" key)
-                    (message "Deleting local file %s" file)
-                    (delete-file file)
-                    (setq keys-in-index (delete key keys-in-index))
-                    (setq index (delete-if
-                                 '(lambda (e) (equal key (cdr (assoc 'key e))))
-                                 index))))
-                (message "Local file %s has been marked deleted locally and does not appear in the index. Deleting." file)
-                (delete-file file))))
-
-      ;; Loop over all notes in the index.
-      (loop for elem across index do
-            (let (key deleted modify file note-text note-key temp-buffer)
-              (setq key (cdr (assoc 'key elem)))
-              (setq deleted (eq (cdr (assoc 'deleted elem)) t))
-              (setq modify (simplenote-parse-gmt-time (cdr (assoc 'modify elem))))
-              (setq file (simplenote-filename-for-note key))
-              ;; Remove the file corresponding to this index element from the
-              ;; list of files. At the end of the loop `files` will contain only
-              ;; those files that (1) have not been marked locally as deleted
-              ;; and (2) they are not contained in the index.
-              (setq files (delete file files))
-              (when (not deleted)
-                ;; Download
-                (when (or (not (file-exists-p file))
-                          (time-less-p (simplenote-file-mtime file) modify))
-                  (message "Downloading note %s from Simplenote" key)
-                  (multiple-value-bind (note-text note-key note-createdate
-                                                  note-modifydate note-deleted)
-                      (simplenote-get-note key token (simplenote-email))
-                    (if note-text
-                        (progn
-                          (message "Downloaded note %s" key)
-                          (write-region note-text nil file nil)
-                          (set-file-times file note-modifydate))
-                      (message "Failed to download note %s" key))))
-                ;; Upload
-                (when (and (file-exists-p file)
-                           (time-less-p modify (simplenote-file-mtime file)))
-                  (message "Uploading note %s to Simplenote" key)
-                  (setq note-text (simplenote-file-contents file))
-                  (setq note-key (simplenote-update-note key
-                                                         note-text
-                                                         token
-                                                         (simplenote-email)
-                                                         (simplenote-file-mtime file)))
-                  (if note-key
-                      (message "Uploaded note %s" note-key)
-                    (message "Failed to upload note %s" note-key))))
-              ;; If a note in the index is marked as deleted and the
-              ;; corresponding local file exists then delete the file.
-              (when (and deleted (file-exists-p file))
-                (message "Note %s has been marked deleted on the server. Deleting local file %s" key file)
-                (delete-file file))))
-
-      ;; If a file is not in the index then delete it from the file system.
-      (loop for file in files do
-            (let (key)
-              (setq key (file-name-nondirectory file))
-              (if (member key keys-in-index)
-                  (message "Key %s is not supposed to be in the index." key)
-                (message "The note %s has not been found in the index. Deleting file %s" key file)
-                (delete-file file))))
-
-      ;; If a new file has been locally created then create a new note on the
-      ;; server and rename the local file after getting the key of the new note
-      ;; from the server.
-      (loop for file in (directory-files (simplenote-new-notes-dir) t "^note-[0-9]+$") do
-            (let (text note-key mod-time)
-              (setq text (simplenote-file-contents file))
-              (setq mod-time (nth 5 (file-attributes file)))
-              (setq note-key (simplenote-create-note text
-                                                     token
-                                                     (simplenote-email)
-                                                     (simplenote-file-mtime file)))
-              (when note-key
-                (message "Created new note on the server with key %s" note-key)
-                (let (new-filename)
-                  (setq new-filename (simplenote-filename-for-note note-key))
-                  (rename-file file new-filename)
-                  (set-file-times new-filename mod-time)))))
-
-      ;; Refresh the browser
-      (save-excursion
-        (simplenote-browser-refresh)))))
-
-(defun simplenote2-sync-notes-deferred ()
   (interactive)
   (deferred:$
     ;; Step1: Sync update on local
