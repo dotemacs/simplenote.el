@@ -269,8 +269,8 @@ Notes marked as deleted are not included in the list."
                   (mapc (lambda (e)
                           (unless (eq (cdr (assq 'deleted e)) t)
                             (push (cons (cdr (assq 'key e))
-                                        (date-to-time
-                                         (concat (cdr (assq 'modify e)) " GMT")))
+                                        (simplenote-parse-gmt-time
+                                         (cdr (assq 'modify e))))
                                   index)))
                         (request-response-data res))
                   index)))))))))
