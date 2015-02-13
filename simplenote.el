@@ -493,103 +493,106 @@ setting."
 
 ;; Simplenote sync
 
-(defun simplenote-sync-notes ()
-  (interactive)
-  (deferred:$
-    ;; Step1: Sync update on local
-    (deferred:parallel
-      (list
-       ;; Step1-1: Delete notes locally marked as deleted.
-       (deferred:$
-         (deferred:parallel
-           (mapcar (lambda (file)
-                     (lexical-let* ((file file)
-                                    (key (file-name-nondirectory file)))
-                       (deferred:$
-                         (simplenote2-mark-note-as-deleted-deferred key)
-                         (deferred:nextc it
-                           (lambda (ret) (when (string= ret key)
-                                           (message "Deleted on local: %s" key)
-                                           (remhash key simplenote2-notes-info)
-                                           (delete-file file)))))))
-                   (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$")))
-         (deferred:nextc it (lambda () nil)))
-       ;; Step1-2: Push notes locally created
-       (deferred:$
-          (deferred:parallel
-            (mapcar (lambda (file)
-                      (lexical-let ((file file))
-                        (deferred:$
-                          (simplenote2-create-note-deferred (simplenote2-get-file-string file)
-                                                            (simplenote-file-mtime file))
-                          (deferred:nextc it
-                            (lambda (key) (when key
-                                            (message "Created on local: %s" key)
-                                            (delete-file file)))))))
-                    (directory-files (simplenote-new-notes-dir) t "^note-[0-9]+$")))
-          (deferred:nextc it (lambda () nil)))
-       ;; Step1-3: Push notes locally modified
-       (deferred:$
-         (let (keys-to-push)
-           (dolist (file (directory-files
-                          (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
-             (let* ((key (file-name-nondirectory file))
-                    (note-info (gethash key simplenote2-notes-info)))
-               (when (and note-info
-                          (time-less-p (seconds-to-time (nth 3 note-info))
-                                       (simplenote-file-mtime file)))
-                 (push key keys-to-push))))
-           (deferred:$
-             (deferred:parallel
-               (mapcar (lambda (key)
+(defun simplenote-sync-notes (&optional arg)
+  (interactive "P")
+  (lexical-let ((arg arg))
+    (deferred:$
+      ;; Step1: Sync update on local
+      (deferred:parallel
+        (list
+         ;; Step1-1: Delete notes locally marked as deleted.
+         (deferred:$
+           (deferred:parallel
+             (mapcar (lambda (file)
+                       (lexical-let* ((file file)
+                                      (key (file-name-nondirectory file)))
                          (deferred:$
-                           (simplenote2-update-note-deferred key)
+                           (simplenote2-mark-note-as-deleted-deferred key)
                            (deferred:nextc it
-                             (lambda (ret) (when (eq ret key)
-                                             (message "Updated on local: %s" key))))))
-                       keys-to-push))
-             (deferred:nextc it (lambda () nil)))))))
-    ;; Step2: Sync update on server
-    (deferred:nextc it
-      (lambda ()
-        ;; Step2-1: Get index from server and update local files.
-        (deferred:$
-          (simplenote2-get-index-deferred)
-          (deferred:nextc it
-            (lambda (index)
-              ;; Step4-1: Delete notes on local which are not included in the index.
-              (let ((keys-in-index (mapcar (lambda (e) (car e)) index)))
-                (dolist (file (directory-files
-                               (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
-                  (let ((key (file-name-nondirectory file)))
-                    (unless (member key keys-in-index)
-                      (message "Deleted on server: %s" key)
-                      (remhash key simplenote2-notes-info)
-                      (delete-file (simplenote-filename-for-note key))))))
-              ;; Step2-2: Update notes on local which are older than that on server.
-              (let (keys-to-update)
-                (dolist (elem index)
-                  (let* ((key (car elem))
-                         (note-info (gethash key simplenote2-notes-info)))
-                    ;; Compare modifydate on server and local data.
-                    ;; If the note information isn't found, the note would be a
-                    ;; newly created note on server.
-                    (when (time-less-p
-                           (seconds-to-time (if note-info (nth 3 note-info) 0))
-                           (cdr elem))
-                      (message "Updated on server: %s" key)
-                      (push key keys-to-update))))
-                (deferred:$
-                  (deferred:parallel
-                    (mapcar (lambda (key) (simplenote2-get-note-deferred key))
-                            keys-to-update))
-                  (deferred:nextc it
-                    (lambda (notes)
-                      (message "Syncing all notes done")
-                      (simplenote2-save-notes-info)
-                      ;; Refresh the browser
-                      (save-excursion
-                        (simplenote-browser-refresh)))))))))))))
+                             (lambda (ret) (when (string= ret key)
+                                             (message "Deleted on local: %s" key)
+                                             (remhash key simplenote2-notes-info)
+                                             (delete-file file)))))))
+                     (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$")))
+           (deferred:nextc it (lambda () nil)))
+         ;; Step1-2: Push notes locally created
+         (deferred:$
+           (deferred:parallel
+             (mapcar (lambda (file)
+                       (lexical-let ((file file))
+                         (deferred:$
+                           (simplenote2-create-note-deferred (simplenote2-get-file-string file)
+                                                             (simplenote-file-mtime file))
+                           (deferred:nextc it
+                             (lambda (key) (when key
+                                             (message "Created on local: %s" key)
+                                             (delete-file file)))))))
+                     (directory-files (simplenote-new-notes-dir) t "^note-[0-9]+$")))
+           (deferred:nextc it (lambda () nil)))
+         ;; Step1-3: Push notes locally modified
+         (deferred:$
+           (let (keys-to-push)
+             (dolist (file (directory-files
+                            (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
+               (let* ((key (file-name-nondirectory file))
+                      (note-info (gethash key simplenote2-notes-info)))
+                 (when (and note-info
+                            (time-less-p (seconds-to-time (nth 3 note-info))
+                                         (simplenote-file-mtime file)))
+                   (push key keys-to-push))))
+             (deferred:$
+               (deferred:parallel
+                 (mapcar (lambda (key)
+                           (deferred:$
+                             (simplenote2-update-note-deferred key)
+                             (deferred:nextc it
+                               (lambda (ret) (when (eq ret key)
+                                               (message "Updated on local: %s" key))))))
+                         keys-to-push))
+               (deferred:nextc it (lambda () nil)))))))
+      ;; Step2: Sync update on server
+      (deferred:nextc it
+        (lambda ()
+          ;; Step2-1: Get index from server and update local files.
+          (deferred:$
+            (simplenote2-get-index-deferred)
+            (deferred:nextc it
+              (lambda (index)
+                ;; Step4-1: Delete notes on local which are not included in the index.
+                (let ((keys-in-index (mapcar (lambda (e) (car e)) index)))
+                  (dolist (file (directory-files
+                                 (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
+                    (let ((key (file-name-nondirectory file)))
+                      (unless (member key keys-in-index)
+                        (message "Deleted on server: %s" key)
+                        (remhash key simplenote2-notes-info)
+                        (delete-file (simplenote-filename-for-note key))))))
+                ;; Step2-2: Update notes on local which are older than that on server.
+                (let (keys-to-update)
+                  (if (not arg)
+                      (dolist (elem index)
+                        (let* ((key (car elem))
+                               (note-info (gethash key simplenote2-notes-info)))
+                          ;; Compare modifydate on server and local data.
+                          ;; If the note information isn't found, the note would be a
+                          ;; newly created note on server.
+                          (when (time-less-p
+                                 (seconds-to-time (if note-info (nth 3 note-info) 0))
+                                 (cdr elem))
+                            (message "Updated on server: %s" key)
+                            (push key keys-to-update))))
+                    (setq keys-to-update (mapcar (lambda (e) (car e)) index)))
+                  (deferred:$
+                    (deferred:parallel
+                      (mapcar (lambda (key) (simplenote2-get-note-deferred key))
+                              keys-to-update))
+                    (deferred:nextc it
+                      (lambda (notes)
+                        (message "Syncing all notes done")
+                        (simplenote2-save-notes-info)
+                        ;; Refresh the browser
+                        (save-excursion
+                          (simplenote-browser-refresh))))))))))))))
 
 
 ;;; Simplenote browser
