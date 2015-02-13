@@ -74,7 +74,7 @@ via the usual `-*- mode: text -*-' header line."
 
 (put 'simplenote-mode 'mode-class 'special)
 
-(defvar simplenote2-server-url "http://simple-note.appspot.com/")
+(defvar simplenote2-server-url "https://simple-note.appspot.com/")
 
 
 ;;; Simplenote authentication
