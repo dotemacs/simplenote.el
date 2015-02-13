@@ -545,7 +545,7 @@ Notes marked as deleted are not included in the list."
                 (lambda (ret)
                   (if ret (progn
                             (message "Pushed note %s" key)
-                            (when buf (current-buffer)
+                            (when (eq buf (current-buffer))
                                   (revert-buffer nil t t))
                             (simplenote-browser-refresh))
                     (message "Failed to push note %s" key)))))
