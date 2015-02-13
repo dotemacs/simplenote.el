@@ -460,15 +460,6 @@ Notes marked as deleted are not included in the list."
 (defun simplenote-filename-for-note-marked-deleted (key)
   (concat (simplenote-trash-dir) key))
 
-(defun simplenote-file-contents (file)
-  (let (temp-buffer contents)
-    (setq temp-buffer (get-buffer-create " *simplenote-temp*"))
-    (with-current-buffer temp-buffer
-      (insert-file-contents file nil nil nil t)
-      (setq contents (encode-coding-string (buffer-string) 'utf-8 t)))
-    (kill-buffer " *simplenote-temp*")
-    contents))
-
 (defun simplenote-note-headline (text)
   "The first non-empty line of a note."
   (let ((begin (string-match "^.+$" text)))
@@ -688,7 +679,7 @@ setting."
 (defun simplenote-new-note-widget (file)
   (let* ((modify (nth 5 (file-attributes file)))
          (modify-string (format-time-string "%Y-%m-%d %H:%M:%S" modify))
-         (note (decode-coding-string (simplenote-file-contents file) 'utf-8 t))
+         (note (simplenote2-get-file-string file))
          (headline (simplenote-note-headline note))
          (shorttext (simplenote-note-headrest note)))
     (widget-create 'link
@@ -727,7 +718,7 @@ setting."
          (key (file-name-nondirectory file))
          (modify (nth 5 (file-attributes file)))
          (modify-string (format-time-string "%Y-%m-%d %H:%M:%S" modify))
-         (note (decode-coding-string (simplenote-file-contents file) 'utf-8 t))
+         (note (simplenote2-get-file-string file))
          (headline (simplenote-note-headline note))
          (shorttext (simplenote-note-headrest note)))
     (widget-create 'link
