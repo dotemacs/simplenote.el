@@ -823,15 +823,15 @@ setting."
        (deferred:$
          (deferred:parallel
            (mapcar (lambda (file)
-                     (lexical-let ((file file))
+                     (lexical-let* ((file file)
+                                    (key (file-name-nondirectory file)))
                        (deferred:$
-                         (simplenote2-mark-note-as-deleted-deferred (file-name-nondirectory file))
+                         (simplenote2-mark-note-as-deleted-deferred key)
                          (deferred:nextc it
-                           (lambda (key)
-                             (when key
-                               (message "Deleted on local: %s" key)
-                               (remhash key simplenote2-notes-info)
-                               (delete-file (simplenote-filename-for-note-marked-deleted key))))))))
+                           (lambda (ret) (when (string= ret key)
+                                           (message "Deleted on local: %s" key)
+                                           (remhash key simplenote2-notes-info)
+                                           (delete-file file)))))))
                    (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$")))
          (deferred:nextc it (lambda () nil)))
        ;; Step1-2: Push notes locally created
@@ -865,7 +865,8 @@ setting."
                          (deferred:$
                            (simplenote2-update-note-deferred key)
                            (deferred:nextc it
-                             (lambda (key) (when key (message "Updated on local: %s" key))))))
+                             (lambda (ret) (when (eq ret key)
+                                             (message "Updated on local: %s" key))))))
                        keys-to-push))
              (deferred:nextc it (lambda () nil)))))))
     ;; Step2: Sync update on server
