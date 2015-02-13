@@ -561,6 +561,27 @@ Notes marked as deleted are not included in the list."
       (add-file-local-variable 'simplenote-key key)
       (simplenote-push-buffer))))
 
+(defun simplenote2-create-note-from-buffer ()
+  (interactive)
+  (lexical-let ((file (buffer-file-name))
+                (buf (current-buffer)))
+    (if (or (string= (simplenote-notes-dir) (file-name-directory file))
+            (not file))
+        (message "Can't create note from this buffer")
+      (save-buffer)
+      (deferred:$
+        (simplenote2-create-note-deferred (simplenote2-get-file-string file)
+                                          (simplenote-file-mtime file))
+        (deferred:nextc it
+          (lambda (key)
+            (if (not key)
+                (message "Failed to create note")
+              (message "Created note %s" key)
+              (simplenote-open-note (simplenote-filename-for-note key))
+              (delete-file file)
+              (kill-buffer buf)
+              (simplenote-browser-refresh))))))))
+
 (defun simplenote-pull-buffer ()
   (interactive)
   (when (and (not simplenote-key)
