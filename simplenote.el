@@ -137,14 +137,15 @@ via the usual `-*- mode: text -*-' header line."
   (when (file-readable-p simplenote2-filename-for-notes-info)
     (load-file simplenote2-filename-for-notes-info)))
 
-(defun simplenote2-save-note (key note)
+(defun simplenote2-save-note (note)
   "Save note information and content gotten from server."
-  (let ((systemtags (cdr (assq 'systemtags note)))
+  (let ((key (cdr (assq 'key note)))
+        (systemtags (cdr (assq 'systemtags note)))
         (createdate (string-to-number (cdr (assq 'createdate note))))
         (modifydate (string-to-number (cdr (assq 'modifydate note))))
         (content (cdr (assq 'content note))))
     ;; Save note information to 'simplenote2-notes-info
-    (puthash key (list (cdr (assq 'key note))
+    (puthash key (list (cdr (assq 'syncnum note))
                        (cdr (assq 'version note))
                        createdate
                        modifydate
@@ -210,36 +211,38 @@ This function returns cached token if it's cached to 'simplenote2-token,\
 
 ;;; API calls for index and notes
 
-(defun simplenote2-get-index-deferred ()
-  "Get note index from server and returns the list of note index.
-
-Each element of the list consists of (KEY . MODIFY) where KEY is the note key as string \
-and MODIFY is the modified date as time object.
-Notes marked as deleted are not included in the list."
-  (deferred:$
-    (simplenote2-get-token-deferred)
-    (deferred:nextc it
-      (lambda (token)
-        (deferred:$
-          (request-deferred
-           (concat simplenote2-server-url "api/index")
-           :type "GET"
-           :params (list (cons "auth" token)
-                         (cons "email" simplenote-email))
-           :parser 'json-read)
-          (deferred:nextc it
-            (lambda (res)
-              (if (request-response-error-thrown res)
-                  (error "Could not retrieve index")
-                (let (index)
+(defun simplenote2-get-index-deferred (&optional index mark)
+  "Get note index from server and returns the list of note index."
+  (lexical-let ((index index)
+                (mark mark))
+    (deferred:$
+      (simplenote2-get-token-deferred)
+      (deferred:nextc it
+        (lambda (token)
+          (deferred:$
+            (let ((params (list '("length" . "100")
+                                (cons "auth" token)
+                                (cons "email" simplenote-email))))
+              (when mark (push (cons "mark" mark) params))
+              (request-deferred
+               (concat simplenote2-server-url "api2/index")
+               :type "GET"
+               :params params
+               :parser 'json-read))
+            (deferred:nextc it
+              (lambda (res)
+                (if (request-response-error-thrown res)
+                    (error "Could not retrieve index")
                   (mapc (lambda (e)
-                          (unless (eq (cdr (assq 'deleted e)) t)
+                          (unless (= (cdr (assq 'deleted e)) 1)
                             (push (cons (cdr (assq 'key e))
-                                        (simplenote-parse-gmt-time
-                                         (cdr (assq 'modify e))))
-                                  index)))
-                        (request-response-data res))
-                  index)))))))))
+                                        (cdr (assq 'syncnum e))) index)))
+                        (cdr (assq 'data (request-response-data res))))
+                  (if (assq 'mark (request-response-data res))
+                      (simplenote2-get-index-deferred
+                       index
+                       (cdr (assq 'mark (request-response-data res))))
+                    index))))))))))
 
 (defun simplenote2-get-note-deferred (key)
   (lexical-let ((key key))
@@ -258,7 +261,7 @@ Notes marked as deleted are not included in the list."
               (lambda (res)
                 (if (request-response-error-thrown res)
                     (message "Could not retreive note %s" key)
-                  (simplenote2-save-note key (request-response-data res)))
+                  (simplenote2-save-note (request-response-data res)))
                 key))))))))
 
 (defun simplenote2-mark-note-as-deleted-deferred (key)
@@ -292,7 +295,7 @@ Notes marked as deleted are not included in the list."
         (lambda (token)
           (deferred:$
             (request-deferred
-             (concat simplenote2-server-url "api2/data/" (nth 0 note-info))
+             (concat simplenote2-server-url "api2/data/" key)
              :type "POST"
              :params (list (cons "auth" token)
                            (cons "email" simplenote-email))
@@ -311,7 +314,7 @@ Notes marked as deleted are not included in the list."
               (lambda (res)
                 (if (request-response-error-thrown res)
                     (progn (message "Could not update note %s" key) nil)
-                  (simplenote2-save-note key (request-response-data res))
+                  (simplenote2-save-note (request-response-data res))
                   key)))))))))
 
 (defun simplenote2-create-note-deferred (content &optional createdate)
@@ -573,12 +576,10 @@ setting."
                       (dolist (elem index)
                         (let* ((key (car elem))
                                (note-info (gethash key simplenote2-notes-info)))
-                          ;; Compare modifydate on server and local data.
+                          ;; Compare syncnum on server and local data.
                           ;; If the note information isn't found, the note would be a
                           ;; newly created note on server.
-                          (when (time-less-p
-                                 (seconds-to-time (if note-info (nth 3 note-info) 0))
-                                 (cdr elem))
+                          (when (< (if note-info (nth 0 note-info) 0) (cdr elem))
                             (message "Updated on server: %s" key)
                             (push key keys-to-update))))
                     (setq keys-to-update (mapcar (lambda (e) (car e)) index)))
