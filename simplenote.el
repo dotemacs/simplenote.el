@@ -161,7 +161,8 @@ via the usual `-*- mode: text -*-' header line."
       (let ((file (simplenote-filename-for-note key))
             (text (decode-coding-string content 'utf-8)))
         (write-region text nil file nil)
-        (set-file-times file (seconds-to-time modifydate))))))
+        (set-file-times file (seconds-to-time modifydate))))
+    key))
 
 
 ;;; Simplenote authentication
@@ -261,8 +262,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
               (lambda (res)
                 (if (request-response-error-thrown res)
                     (message "Could not retreive note %s" key)
-                  (simplenote2-save-note (request-response-data res)))
-                key))))))))
+                  (simplenote2-save-note (request-response-data res)))))))))))
 
 (defun simplenote2-mark-note-as-deleted-deferred (key)
   (lexical-let ((key key))
@@ -314,34 +314,36 @@ This function returns cached token if it's cached to 'simplenote2-token,\
               (lambda (res)
                 (if (request-response-error-thrown res)
                     (progn (message "Could not update note %s" key) nil)
-                  (simplenote2-save-note (request-response-data res))
-                  key)))))))))
+                  (simplenote2-save-note (request-response-data res)))))))))))
 
-(defun simplenote2-create-note-deferred (content &optional createdate)
-  (lexical-let ((content content)
-                (createdate createdate))
+(defun simplenote2-create-note-deferred (file)
+  (lexical-let ((file file)
+                (content (simplenote2-get-file-string file))
+                (createdate (format "%.6f" (time-to-seconds
+                                            (simplenote-file-mtime file)))))
     (deferred:$
       (simplenote2-get-token-deferred)
       (deferred:nextc it
         (lambda (token)
-          (let ((params (list (cons "auth" token)
-                              (cons "email" simplenote-email))))
-            (when createdate
-              (let ((date-string (format-time-string "%Y-%m-%d %H:%M:%S" createdate t)))
-                (setq params (append params (list (cons "create" date-string)
-                                                  (cons "modify" date-string))))))
-            (deferred:$
-              (request-deferred
-               (concat simplenote2-server-url "api/note")
-               :type "POST"
-               :params params
-               :data (base64-encode-string (encode-coding-string content 'utf-8 t))
-               :parser 'buffer-string)
-              (deferred:nextc it
-                (lambda (res)
-                  (if (request-response-error-thrown res)
-                      (progn (message "Could not create note") nil)
-                    (simplenote2-get-note-deferred (request-response-data res))))))))))))
+          (deferred:$
+            (request-deferred
+             (concat simplenote2-server-url "api2/data")
+             :type "POST"
+             :params (list (cons "auth" token)
+                           (cons "email" simplenote-email))
+             :data (json-encode
+                    (list (cons "content" content)
+                          (cons "createdate" createdate)
+                          (cons "modifydate" createdate)))
+             :headers '(("Content-Type" . "application/json"))
+             :parser 'json-read)
+            (deferred:nextc it
+              (lambda (res)
+                (if (request-response-error-thrown res)
+                    (progn (message "Could not create note") nil)
+                  (let ((note (request-response-data res)))
+                    (push (cons 'content content) note)
+                    (simplenote2-save-note note)))))))))))
 
 
 ;;; Push and pull buffer as note
@@ -356,8 +358,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
                     (file-name-directory file))
       (save-buffer)
       (deferred:$
-        (simplenote2-create-note-deferred (buffer-string)
-                                          (simplenote-file-mtime file))
+        (simplenote2-create-note-deferred file)
         (deferred:nextc it
           (lambda (key)
             (when key
@@ -397,8 +398,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
         (message "Can't create note from this buffer")
       (save-buffer)
       (deferred:$
-        (simplenote2-create-note-deferred (simplenote2-get-file-string file)
-                                          (simplenote-file-mtime file))
+        (simplenote2-create-note-deferred file)
         (deferred:nextc it
           (lambda (key)
             (if (not key)
@@ -524,8 +524,7 @@ setting."
              (mapcar (lambda (file)
                        (lexical-let ((file file))
                          (deferred:$
-                           (simplenote2-create-note-deferred (simplenote2-get-file-string file)
-                                                             (simplenote-file-mtime file))
+                           (simplenote2-create-note-deferred file)
                            (deferred:nextc it
                              (lambda (key) (when key
                                              (message "Created on local: %s" key)
