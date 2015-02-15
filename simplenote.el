@@ -430,8 +430,8 @@ This function returns cached token if it's cached to 'simplenote2-token,\
               (deferred:nextc it
                 (lambda (ret)
                   (when (eq buf (current-buffer))
-                    (revert-buffer nil t t)))
-                (simplenote-browser-refresh)))))
+                    (revert-buffer nil t t))
+                  (simplenote-browser-refresh))))))
       (message "Can't pull buffer which isn't simplenote note"))))
 
 
