@@ -25,7 +25,7 @@
 
 
 
-(require 'cl)
+(eval-when-compile (require 'cl))
 (require 'url)
 (require 'json)
 (require 'widget)
@@ -304,7 +304,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
                           (cons "version" (number-to-string (nth 1 note-info)))
                           (cons "modifydate"
                                 (format "%.6f"
-                                        (time-to-seconds
+                                        (float-time
                                          (simplenote-file-mtime
                                           (simplenote-filename-for-note key)))))))
              :headers '(("Content-Type" . "application/json"))
@@ -318,7 +318,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
 (defun simplenote2-create-note-deferred (file)
   (lexical-let ((file file)
                 (content (simplenote2-get-file-string file))
-                (createdate (format "%.6f" (time-to-seconds
+                (createdate (format "%.6f" (float-time
                                             (simplenote-file-mtime file)))))
     (deferred:$
       (simplenote2-get-token-deferred)
@@ -660,12 +660,12 @@ setting."
   ;; Other notes list
   (let (files)
     (setq files (append
-                 (mapcar '(lambda (file) (cons file nil))
+                 (mapcar (lambda (file) (cons file nil))
                          (directory-files (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
-                 (mapcar '(lambda (file) (cons file t))
+                 (mapcar (lambda (file) (cons file t))
                          (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$"))))
     (when files
-      (setq files (sort files '(lambda (p1 p2) (simplenote-file-newer-p (car p1) (car p2)))))
+      (setq files (sort files (lambda (p1 p2) (simplenote-file-newer-p (car p1) (car p2)))))
       (setq files (sort files (lambda (p1 p2) (simplenote2-pinned-note-p (car p1) (car p2)))))
       (widget-insert "== NOTES")
       (dolist (tag simplenote2-filter-note-tag-list)
