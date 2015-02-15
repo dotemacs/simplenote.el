@@ -450,6 +450,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
 (defun simplenote-setup ()
   (interactive)
   (simplenote2-load-notes-info)
+  (add-hook 'kill-emacs-hook 'simplenote2-save-notes-info)
   (when (not (file-exists-p simplenote-directory))
     (make-directory simplenote-directory t))
   (when (not (file-exists-p (simplenote-notes-dir)))
