@@ -668,6 +668,7 @@ setting."
                          (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$"))))
     (when files
       (setq files (sort files '(lambda (p1 p2) (simplenote-file-newer-p (car p1) (car p2)))))
+      (setq files (sort files (lambda (p1 p2) (simplenote2-pinned-note-p (car p1) (car p2)))))
       (widget-insert "== NOTES\n\n")
       (mapc 'simplenote-other-note-widget files)))
   (use-local-map simplenote-mode-map)
@@ -678,6 +679,10 @@ setting."
     (setq time1 (nth 5 (file-attributes file1)))
     (setq time2 (nth 5 (file-attributes file2)))
     (time-less-p time2 time1)))
+
+(defun simplenote2-pinned-note-p (file1 file2)
+  (and (nth 6 (gethash (file-name-nondirectory file1) simplenote2-notes-info))
+       (not (nth 6 (gethash (file-name-nondirectory file2) simplenote2-notes-info)))))
 
 (defun simplenote-new-note-widget (file)
   (let* ((modify (nth 5 (file-attributes file)))
@@ -722,8 +727,10 @@ setting."
          (modify (nth 5 (file-attributes file)))
          (modify-string (format-time-string "%Y-%m-%d %H:%M:%S" modify))
          (note (simplenote2-get-file-string file))
+         (note-info (gethash key simplenote2-notes-info))
          (headline (simplenote-note-headline note))
          (shorttext (simplenote-note-headrest note)))
+    (when (nth 6 note-info) (widget-insert "*"))
     (widget-create 'link
                    :button-prefix ""
                    :button-suffix ""
