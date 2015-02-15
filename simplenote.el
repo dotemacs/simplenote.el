@@ -272,12 +272,12 @@ This function returns cached token if it's cached to 'simplenote2-token,\
         (lambda (token)
           (deferred:$
             (request-deferred
-             (concat simplenote2-server-url "api/delete")
-             :type "GET"
-             :params (list (cons "key" key)
-                           (cons "auth" token)
+             (concat simplenote2-server-url "api2/data/" key)
+             :type "POST"
+             :params (list (cons "auth" token)
                            (cons "email" simplenote-email))
-             :parser 'buffer-string)
+             :data (json-encode (list (cons "deleted" 1)))
+             :parser 'json-read)
             (deferred:nextc it
               (lambda (res)
                 (if (request-response-error-thrown res)
@@ -512,7 +512,7 @@ setting."
                          (deferred:$
                            (simplenote2-mark-note-as-deleted-deferred key)
                            (deferred:nextc it
-                             (lambda (ret) (when (string= ret key)
+                             (lambda (ret) (when ret
                                              (message "Deleted on local: %s" key)
                                              (remhash key simplenote2-notes-info)
                                              (delete-file file)))))))
