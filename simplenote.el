@@ -350,7 +350,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
 
 ;;; Push and pull buffer as note
 
-(defun simplenote2-push-buffer-deferred ()
+(defun simplenote2-push-buffer ()
   (interactive)
   (lexical-let ((file (buffer-file-name))
                 (buf (current-buffer)))
@@ -402,7 +402,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
               (kill-buffer buf)
               (simplenote-browser-refresh))))))))
 
-(defun simplenote2-pull-buffer-deferred ()
+(defun simplenote2-pull-buffer ()
   (interactive)
   (lexical-let ((file (buffer-file-name))
                 (buf (current-buffer)))
@@ -414,7 +414,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
                                 (simplenote-file-mtime file))
                    (y-or-n-p
                     "This note appears to have been modified. Do you push it on ahead?"))
-              (simplenote2-push-buffer-deferred)
+              (simplenote2-push-buffer)
             (save-buffer)
             (deferred:$
               (simplenote2-get-note-deferred key)
