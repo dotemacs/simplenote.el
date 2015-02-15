@@ -358,16 +358,7 @@ This function returns cached token if it's cached to 'simplenote2-token,\
      ;; File is located on new notes directory
      ((string-match (simplenote-new-notes-dir)
                     (file-name-directory file))
-      (save-buffer)
-      (deferred:$
-        (simplenote2-create-note-deferred file)
-        (deferred:nextc it
-          (lambda (key)
-            (when key
-              (simplenote-open-note (simplenote-filename-for-note key))
-              (delete-file file)
-              (kill-buffer buf)
-              (simplenote-browser-refresh))))))
+      (simplenote2-create-note-from-buffer))
      ;; File is located on notes directory
      ((string-match (simplenote-notes-dir)
                     (file-name-directory file))
