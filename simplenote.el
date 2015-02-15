@@ -517,6 +517,8 @@ setting."
                              (lambda (ret) (when ret
                                              (message "Deleted on local: %s" key)
                                              (remhash key simplenote2-notes-info)
+                                             (let ((buf (get-file-buffer file)))
+                                               (when buf (kill-buffer buf)))
                                              (delete-file file)))))))
                      (directory-files (simplenote-trash-dir) t "^[a-zA-Z0-9_\\-]+$")))
            (deferred:nextc it (lambda () nil)))
@@ -530,6 +532,8 @@ setting."
                            (deferred:nextc it
                              (lambda (key) (when key
                                              (message "Created on local: %s" key)
+                                             (let ((buf (get-file-buffer file)))
+                                               (when buf (kill-buffer buf)))
                                              (delete-file file)))))))
                      (directory-files (simplenote-new-notes-dir) t "^note-[0-9]+$")))
            (deferred:nextc it (lambda () nil)))
@@ -570,7 +574,9 @@ setting."
                       (unless (member key keys-in-index)
                         (message "Deleted on server: %s" key)
                         (remhash key simplenote2-notes-info)
-                        (delete-file (simplenote-filename-for-note key))))))
+                        (let ((buf (get-file-buffer file)))
+                          (when buf (kill-buffer buf)))
+                        (delete-file file)))))
                 ;; Step2-2: Update notes on local which are older than that on server.
                 (let (keys-to-update)
                   (if (not arg)
@@ -738,8 +744,11 @@ setting."
                    :tag file
                    :help-echo "Permanently remove this file"
                    :notify (lambda (widget &rest ignore)
-                             (delete-file (widget-get widget :tag))
-                             (simplenote-browser-refresh))
+                             (let ((file (widget-get widget :tag)))
+                               (delete-file file)
+                               (let ((buf (get-file-buffer file)))
+                                 (when buf (kill-buffer buf)))
+                               (simplenote-browser-refresh)))
                    "Remove")
     (widget-insert "\n\n")))
 
