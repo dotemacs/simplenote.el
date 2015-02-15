@@ -671,7 +671,10 @@ setting."
     (when files
       (setq files (sort files '(lambda (p1 p2) (simplenote-file-newer-p (car p1) (car p2)))))
       (setq files (sort files (lambda (p1 p2) (simplenote2-pinned-note-p (car p1) (car p2)))))
-      (widget-insert "== NOTES\n\n")
+      (widget-insert "== NOTES")
+      (dolist (tag simplenote2-filter-note-tag-list)
+        (widget-insert (format " [%s]" tag)))
+      (widget-insert "\n\n")
       (dolist (file files)
         (let ((note-info (gethash (file-name-nondirectory (car file))
                                   simplenote2-notes-info)))
