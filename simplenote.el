@@ -94,9 +94,6 @@ via the usual `-*- mode: text -*-' header line."
 (defun simplenote-file-mtime (path)
   (nth 5 (file-attributes path)))
 
-(defun simplenote-parse-gmt-time (header-str)
-  (apply 'encode-time (append (butlast (parse-time-string header-str)) (list "GMT"))))
-
 (defun simplenote2-get-file-string (file)
   (with-temp-buffer
     (insert-file-contents file)
