@@ -546,8 +546,9 @@ setting."
                            (deferred:$
                              (simplenote2-update-note-deferred key)
                              (deferred:nextc it
-                               (lambda (ret) (when (eq ret key)
-                                               (message "Updated on local: %s" key))))))
+                               (lambda (ret)
+                                 (when (eq ret key)
+                                   (message "Updated on local: %s" key))))))
                          keys-to-push))
                (deferred:nextc it (lambda () nil)))))))
       ;; Step2: Sync update on server
@@ -558,7 +559,7 @@ setting."
             (simplenote2-get-index-deferred)
             (deferred:nextc it
               (lambda (index)
-                ;; Step4-1: Delete notes on local which are not included in the index.
+                ;; Step2-2: Delete notes on local which are not included in the index.
                 (let ((keys-in-index (mapcar (lambda (e) (car e)) index)))
                   (dolist (file (directory-files
                                  (simplenote-notes-dir) t "^[a-zA-Z0-9_\\-]+$"))
@@ -569,7 +570,7 @@ setting."
                         (let ((buf (get-file-buffer file)))
                           (when buf (kill-buffer buf)))
                         (delete-file file)))))
-                ;; Step2-2: Update notes on local which are older than that on server.
+                ;; Step2-3: Update notes on local which are older than that on server.
                 (let (keys-to-update)
                   (if (not arg)
                       (dolist (elem index)
