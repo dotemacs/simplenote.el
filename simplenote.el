@@ -765,7 +765,11 @@ setting."
                    (if deleted
                        "Undelete"
                      "Delete"))
-    (widget-insert "\n\n")))
+    (widget-insert "\n    ")
+    (let ((tags (nth 4 note-info)))
+      (loop for i from 0 below (length tags) do
+            (widget-insert (format "[%s] "(aref tags i)))))
+    (widget-insert "\n")))
 
 (setq simplenote-delete-me
       (lambda (widget &rest ignore)
