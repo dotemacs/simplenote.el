@@ -86,6 +86,8 @@ via the usual `-*- mode: text -*-' header line."
 (defvar simplenote2-filename-for-notes-info
   (concat (file-name-as-directory simplenote-directory) ".notes-info.el"))
 
+(defvar simplenote2-filter-note-tag-list nil)
+
 
 ;;; Unitity functions
 
@@ -670,9 +672,27 @@ setting."
       (setq files (sort files '(lambda (p1 p2) (simplenote-file-newer-p (car p1) (car p2)))))
       (setq files (sort files (lambda (p1 p2) (simplenote2-pinned-note-p (car p1) (car p2)))))
       (widget-insert "== NOTES\n\n")
-      (mapc 'simplenote-other-note-widget files)))
+      (dolist (file files)
+        (let ((note-info (gethash (file-name-nondirectory (car file))
+                                  simplenote2-notes-info)))
+          (when (or (not simplenote2-filter-note-tag-list)
+                    (loop for tag in simplenote2-filter-note-tag-list
+                          when (simplenote2-tag-existp tag (nth 4 note-info))
+                          collect tag))
+            (simplenote-other-note-widget file))))))
   (use-local-map simplenote-mode-map)
   (widget-setup))
+
+(defun simplenote2-filter-note-by-tag (&optional arg)
+  (interactive "P")
+  (setq simplenote2-filter-note-tag-list nil)
+  (when (not arg)
+    (let (tag)
+      (setq tag (read-string "Input tag: "))
+      (while (not (string= tag ""))
+        (push tag simplenote2-filter-note-tag-list)
+        (setq tag (read-string "Input tag: ")))))
+  (simplenote-browser-refresh))
 
 (defun simplenote-file-newer-p (file1 file2)
   (let (time1 time2)
