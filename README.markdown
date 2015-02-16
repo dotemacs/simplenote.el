@@ -1,3 +1,12 @@
+# NOTE
+
+There is a **new package** [simplenote2.el][sn2] which uses **version
+2** of the [Simplenote][sn] API. It has more features than this
+package.
+
+The below package will be kept around and updated in order to support
+the existing users.
+
 # simplenote.el
 
 Emacs lisp package that can assist your interaction with the
@@ -123,3 +132,4 @@ your notes. Use at your own peril and keep a backup of your notes.
 [melpa]: http://melpa.org/
 [si]: http://simperium.com/
 [sn]: http://simplenoteapp.com/
+[sn2]: https://github.com/alpha22jp/simplenote2.el
