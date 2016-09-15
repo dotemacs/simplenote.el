@@ -368,6 +368,8 @@ setting."
     ;; Don't switch mode when set via file cookie
     (when (eq major-mode (default-value 'major-mode))
       (funcall simplenote-notes-mode))
+    ;; Rename the buffer something useful
+    (rename-buffer (simplenote2--note-headline (buffer-string)))
     ;; Refresh notes display after save
     (add-hook 'after-save-hook
               (lambda () (save-excursion (simplenote-browser-refresh)))
